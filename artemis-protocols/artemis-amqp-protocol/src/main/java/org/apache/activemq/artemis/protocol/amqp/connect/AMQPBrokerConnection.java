@@ -432,11 +432,29 @@ public class AMQPBrokerConnection implements ClientConnectionLifeCycleListener, 
                   final boolean coreTunnelingEnabled = isCoreMessageTunnelingEnabled(replica);
                   final Symbol[] desiredCapabilities;
 
-                  if (coreTunnelingEnabled) {
-                     desiredCapabilities = new Symbol[] {AMQPMirrorControllerSource.MIRROR_CAPABILITY,
-                                                         AmqpSupport.CORE_MESSAGE_TUNNELING_SUPPORT};
-                  } else {
-                     desiredCapabilities = new Symbol[] {AMQPMirrorControllerSource.MIRROR_CAPABILITY};
+                  if (!replica.isForward()){
+                     if (coreTunnelingEnabled) {
+                        desiredCapabilities = new Symbol[] {
+                           AMQPMirrorControllerSource.MIRROR_CAPABILITY,
+                           AmqpSupport.CORE_MESSAGE_TUNNELING_SUPPORT,
+                           AMQPMirrorControllerSource.NO_FORWARD
+                        };
+                     } else {
+                        desiredCapabilities = new Symbol[] {
+                           AMQPMirrorControllerSource.MIRROR_CAPABILITY,
+                           AMQPMirrorControllerSource.NO_FORWARD
+                        };
+                     }
+                  }else {
+                     if (coreTunnelingEnabled) {
+                        desiredCapabilities = new Symbol[] {
+                           AMQPMirrorControllerSource.MIRROR_CAPABILITY,
+                           AmqpSupport.CORE_MESSAGE_TUNNELING_SUPPORT};
+                     } else {
+                        desiredCapabilities = new Symbol[] {
+                           AMQPMirrorControllerSource.MIRROR_CAPABILITY
+                        };
+                     }
                   }
 
                   final Symbol[] requiredOfferedCapabilities = new Symbol[] {AMQPMirrorControllerSource.MIRROR_CAPABILITY};
@@ -447,7 +465,7 @@ public class AMQPBrokerConnection implements ClientConnectionLifeCycleListener, 
                                 (r) -> AMQPMirrorControllerSource.validateProtocolData(protonProtocolManager.getReferenceIDSupplier(), r, getMirrorSNF(replica)),
                                 server.getNodeID().toString(),
                                 desiredCapabilities,
-                                null,
+                                replica.isForward() ? null : new Symbol[] {AMQPMirrorControllerSource.NO_FORWARD},
                                 requiredOfferedCapabilities);
                } else if (connectionElement.getType() == AMQPBrokerConnectionAddressType.FEDERATION) {
                   // Starting the Federation triggers rebuild of federation links

@@ -92,6 +92,7 @@ public class AMQPMirrorControllerSource extends BasicMirrorController<Sender> im
 
    public static final SimpleString INTERNAL_ID_EXTRA_PROPERTY = SimpleString.of(INTERNAL_ID.toString());
    public static final SimpleString INTERNAL_BROKER_ID_EXTRA_PROPERTY = SimpleString.of(BROKER_ID.toString());
+   public static final Symbol NO_FORWARD = Symbol.getSymbol("amq.no.forward");
 
    private static final ThreadLocal<RoutingContext> mirrorControlRouting = ThreadLocal.withInitial(() -> new RoutingContextImpl(null));
 

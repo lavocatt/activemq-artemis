@@ -57,6 +57,7 @@ import org.apache.activemq.artemis.protocol.amqp.proton.MessageReader;
 import org.apache.activemq.artemis.protocol.amqp.proton.ProtonAbstractReceiver;
 import org.apache.activemq.artemis.utils.ByteUtil;
 import org.apache.activemq.artemis.utils.pools.MpscPool;
+import org.apache.qpid.proton.amqp.Symbol;
 import org.apache.qpid.proton.amqp.messaging.Accepted;
 import org.apache.qpid.proton.amqp.messaging.AmqpValue;
 import org.apache.qpid.proton.amqp.messaging.DeliveryAnnotations;
@@ -264,6 +265,14 @@ public class AMQPMirrorControllerTarget extends ProtonAbstractReceiver implement
    protected void actualDelivery(Message message, Delivery delivery, DeliveryAnnotations deliveryAnnotations, Receiver receiver, Transaction tx) {
       OperationContext oldContext = recoverContext();
       incrementSettle();
+      boolean noForward = false;
+      if (receiver.getRemoteDesiredCapabilities() != null) {
+         for (Symbol capability : receiver.getRemoteDesiredCapabilities()) {
+            if (capability == AMQPMirrorControllerSource.NO_FORWARD) {
+               noForward = true;
+            }
+         }
+      }
 
       logger.trace("{}::actualDelivery call for {}", server, message);
       setControllerInUse(this);
@@ -320,14 +329,14 @@ public class AMQPMirrorControllerTarget extends ProtonAbstractReceiver implement
                   }
                }
             } else {
-               if (sendMessage(amqpMessage, deliveryAnnotations, messageAckOperation)) {
+               if (sendMessage(amqpMessage, deliveryAnnotations, messageAckOperation, noForward)) {
                   // since the send was successful, we give up the reference here,
                   // so there won't be any call on afterCompleteOperations
                   messageAckOperation = null;
                }
             }
          } else {
-            if (sendMessage(message, deliveryAnnotations, messageAckOperation)) {
+            if (sendMessage(message, deliveryAnnotations, messageAckOperation, noForward)) {
                // since the send was successful, we give up the reference here,
                // so there won't be any call on afterCompleteOperations
                messageAckOperation = null;
@@ -486,7 +495,7 @@ public class AMQPMirrorControllerTarget extends ProtonAbstractReceiver implement
     * as the sendMessage was successful the OperationContext of the transaction will take care of the completion.
     * The caller of this method should give up any reference to messageCompletionAck when this method returns true.
     * */
-   private boolean sendMessage(Message message, DeliveryAnnotations deliveryAnnotations, ACKMessageOperation messageCompletionAck) throws Exception {
+   private boolean sendMessage(Message message, DeliveryAnnotations deliveryAnnotations, ACKMessageOperation messageCompletionAck, boolean noForward) throws Exception {
       if (message.getMessageID() <= 0) {
          message.setMessageID(server.getStorageManager().generateID());
       }
@@ -511,6 +520,12 @@ public class AMQPMirrorControllerTarget extends ProtonAbstractReceiver implement
       }
 
       routingContext.setDuplicateDetection(false); // we do our own duplicate detection here
+
+      if (noForward) {
+         message.usageDown(); // large messages would be removed here
+         flow();
+         return false;
+      }
 
       DuplicateIDCache duplicateIDCache;
       if (lruDuplicateIDKey != null && lruDuplicateIDKey.equals(internalMirrorID)) {
